@@ -1,0 +1,43 @@
+image: docker:latest
+
+services:
+  - docker:dind
+
+variables:
+  DOCKER_DRIVER: overlay2
+  DOCKER_REGISTRY: registry.gitlab.com
+  DOCKER_REPOSITORY: <namespace>/<project>
+  DOCKER_IMAGE_BACKEND: $DOCKER_REGISTRY/$DOCKER_REPOSITORY/backend
+  DOCKER_IMAGE_FRONTEND: $DOCKER_REGISTRY/$DOCKER_REPOSITORY/frontend
+  CI_REGISTRY: $DOCKER_REGISTRY
+  CI_REGISTRY_USER: $CI_JOB_TOKEN
+  CI_REGISTRY_PASSWORD: $CI_JOB_TOKEN
+  IMAGE_NAME_BACKEND: $DOCKER_IMAGE_BACKEND:latest
+  IMAGE_NAME_FRONTEND: $DOCKER_IMAGE_FRONTEND:latest
+
+
+stages:
+  - build
+  - deploy
+
+build_backend:
+  stage: build
+  script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - docker build -t $IMAGE_NAME_BACKEND ./backend
+    - docker push $IMAGE_NAME_BACKEND
+    - docker build -t $IMAGE_NAME_FRONTEND ./frontend
+    - docker push $IMAGE_NAME_FRONTEND
+  only:
+    - main
+
+deploy:
+  stage: deploy
+  image: docker:latest
+  script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - docker pull $IMAGE_NAME_BACKEND
+    - docker pull $IMAGE_NAME_FRONTEND
+    - docker-compose -f docker-compose.yml up -d
+  only:
+    - main
